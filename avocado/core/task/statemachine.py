@@ -79,7 +79,22 @@ class Worker:
         except IndexError:
             return
 
-        requirements_ok = await self._spawner.check_task_requirements(runtime_task)
+        # we don't need to run this block for tasks without prereqs
+        if runtime_task.task.prereqs:
+            finished_tasks_uid = [runtime_task.task.uid for runtime_task in self._state_machine.finished]
+            for prereq in runtime_task.task.prereqs:
+                if prereq in finished_tasks_uid:
+                    runtime_task.task.prereqs.remove(prereq)
+            # check if the last task was removed
+            if runtime_task.task.prereqs:
+                async with self._state_machine.lock:
+                    self._state_machine.triaging.append(runtime_task)
+                    runtime_task.status = 'WAITING PRE-REQS'
+                await asyncio.sleep(0.1)
+                return
+
+        #requirements_ok = await self._spawner.check_task_requirements(runtime_task)
+        requirements_ok = True
         if requirements_ok:
             async with self._state_machine.lock:
                 self._state_machine.ready.append(runtime_task)
@@ -120,6 +135,7 @@ class Worker:
         else:
             async with self._state_machine.lock:
                 self._state_machine.finished.append(runtime_task)
+                runtime_task.status = 'FAILED ON START'
 
     async def monitor(self):
         """Reads from started, moves into finished."""

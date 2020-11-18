@@ -16,6 +16,8 @@ import tempfile
 import time
 import unittest
 
+from uuid import uuid4
+
 try:
     import pkg_resources
     PKG_RESOURCES_AVAILABLE = True
@@ -448,6 +450,25 @@ class ExecTestRunner(ExecRunner):
 RUNNERS_REGISTRY_PYTHON_CLASS['exec-test'] = ExecTestRunner
 
 
+class RequirementRunner(ExecRunner):
+    """
+    Runner for standalone executables treated as requirements
+
+    Runnable attributes usage is identical to :class:`ExecRunner`
+    """
+    def run(self):
+        for most_current_execution_state in super().run():
+            returncode = most_current_execution_state.get('returncode')
+            if returncode == 0:
+                most_current_execution_state['result'] = 'pass'
+            else:
+                most_current_execution_state['result'] = 'fail'
+            yield most_current_execution_state
+
+
+RUNNERS_REGISTRY_PYTHON_CLASS['requirement'] = RequirementRunner
+
+
 class PythonUnittestRunner(BaseRunner):
     """
     Runner for Python unittests
@@ -639,12 +660,13 @@ class Task:
     runner, a task should be a unique entity to track its state,
     that is, whether it is pending, is running or has finished.
 
-    :param identifier:
+    :param name:
     :param runnable:
     """
     def __init__(self, identifier, runnable, status_uris=None,
                  known_runners=None):
         self.identifier = identifier
+        self.uid = str(uuid4())
         self.runnable = runnable
         self.status_services = []
         if status_uris is not None:
@@ -653,12 +675,15 @@ class Task:
         if known_runners is None:
             known_runners = {}
         self.known_runners = known_runners
+        self.prereqs = []
         self.spawn_handle = None
         self.output_dir = None
 
     def __repr__(self):
-        fmt = '<Task identifier="{}" runnable="{}" status_services="{}"'
-        return fmt.format(self.identifier, self.runnable, self.status_services)
+        fmt = ('<Task identifier="{}" runnable="{}" prereqs="{}"'
+              ' status_services="{}"')
+        return fmt.format(self.identifier, self.runnable, self.prereqs,
+                          self.status_services)
 
     def are_requirements_available(self, runners_registry=None):
         """Verifies if requirements needed to run this task are available.
