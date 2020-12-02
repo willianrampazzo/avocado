@@ -126,6 +126,7 @@ check: clean develop
 	# Unless manually set, this is equivalent to AVOCADO_CHECK_LEVEL=0
 	PYTHON=$(PYTHON) $(PYTHON) selftests/check.py
 	selftests/check_tmp_dirs
+	cat /home/travis/avocado/job-results/*/job.log
 
 develop:
 	$(PYTHON) setup.py develop $(PYTHON_DEVELOP_ARGS)
